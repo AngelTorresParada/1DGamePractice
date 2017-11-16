@@ -7,6 +7,10 @@
 #include "windows.h"
 #include <vector>
 
+#include "Enemy.h"
+#include "Bullet.h"
+#include "Prize.h"
+
 #define ESC_KEY 27
 #define A_KEY 97
 #define D_KEY 100
@@ -20,16 +24,11 @@
 #define RIGHT 0
 #define LEFT 1
 
-struct Enemy {
-	int pos = -1;
-	int appearance = -1;
-};
-
 const int width = 80;
 
 std::vector<Enemy> enemiesPos;
-std::vector<int> bulletsPos;
-std::vector<int> prizesPos;
+std::vector<Bullet> bulletsPos;
+std::vector<Prize> prizesPos;
 
 int x = width / 2;
 int pressedKey = 0;
@@ -90,11 +89,11 @@ void main() {
 					break;
 
 				case K_KEY:
-					bulletsPos.push_back(x - 1);
+					bulletsPos.push_back(Bullet(x - 1, LEFT));
 					break;
 
 				case L_KEY:
-					bulletsPos.push_back(x + 1);
+					bulletsPos.push_back(Bullet(x + 1, RIGHT));
 					break;
 
 				case ESC_KEY:
@@ -117,8 +116,8 @@ void buildMap() {
 	map[x] = 'i';
 
 	for (auto bullet = bulletsPos.begin(); bullet != bulletsPos.end(); ++bullet) {
-		if (x > *bullet) map[*bullet] = '<';
-		if (x < *bullet) map[*bullet] = '>';
+		if (x > bullet->pos) map[bullet->pos] = '<';
+		if (x < bullet->pos) map[bullet->pos] = '>';
 	}
 
 	for (auto enemy = enemiesPos.begin(); enemy != enemiesPos.end(); enemy++) {
@@ -126,7 +125,7 @@ void buildMap() {
 	}
 
 	for (auto prize = prizesPos.begin(); prize != prizesPos.end(); prize++) {
-		map[*prize] = '&';
+		map[prize->pos] = '&';
 	}
 
 	for (int i = 0; i < width; i++) {
@@ -168,12 +167,9 @@ void updateBullet() {
 
 	//LOGICA DE LA BALA
 	for (auto bullet = bulletsPos.begin(); bullet != bulletsPos.end(); bullet++) {
-		if (*bullet < x) *bullet -= 1;
-		else {
-			if (*bullet > x) *bullet += 1;
-		}
+		bullet->update();
 
-		if (*bullet < 0 || *bullet >= (width - 1)) {
+		if (bullet->isOutOfField(width)) {
 			bulletsPos.erase(bullet);
 			return;
 		}
@@ -187,10 +183,9 @@ void updateEnemy() {
 	//LOGICA DEL ENEMIGO
 
 	for (auto enemy = enemiesPos.begin(); enemy != enemiesPos.end(); ++enemy) {
-		if (enemy->appearance == LEFT) enemy->pos--;
-		if (enemy->appearance == RIGHT) enemy->pos++;
+		enemy->update();
 
-		if (enemy->pos == x) {
+		if (enemy->isPlayerAttacked(x)) {
 			lives--;
 			enemiesPos.erase(enemy);
 			if (lives <= 0) {
@@ -204,9 +199,7 @@ void updateEnemy() {
 
 	if (enemyCicles == 0) {
 		int a = rand() % 2;
-		Enemy enemy;
-		enemy.pos = (a == LEFT) ? width - 1 : 0;
-		enemy.appearance = a;
+		Enemy enemy(((a == LEFT) ? width - 1 : 0), a);
 		enemiesPos.push_back(enemy);
 		enemyCicles = ENEMY_MAX_CYCLE;
 	}
@@ -219,7 +212,7 @@ void checkCollisions() {
 	//INTERACCION BALA-ENEMIGO
 	for (auto enemy = enemiesPos.begin(); enemy != enemiesPos.end(); enemy++) {
 		for (auto bullet = bulletsPos.begin(); bullet != bulletsPos.end(); bullet++) {
-			if (*bullet == enemy->pos || (*bullet < x && *bullet + 1 == enemy->pos) || (*bullet > x && *bullet - 1 == enemy->pos)) {
+			if (enemy->checkBulletCollisions(*bullet)) {
 				enemiesPos.erase(enemy);
 				bulletsPos.erase(bullet);
 				score += 5;
@@ -241,7 +234,7 @@ void updatePrize() {
 	}
 
 	for (auto prize = prizesPos.begin(); prize != prizesPos.end(); prize++) {
-		if (*prize == x) {
+		if (prize->isPrizeObtained(x)) {
 			score += 100;
 			prizesPos.erase(prize);
 			break;
@@ -250,7 +243,7 @@ void updatePrize() {
 
 	for (auto prize = prizesPos.begin(); prize != prizesPos.end(); prize++) {
 		for (auto bullet = bulletsPos.begin(); bullet != bulletsPos.end(); ) {
-			if (*prize == *bullet) {
+			if (prize->checkBulletCollisions(*bullet)) {
 				bulletsPos.erase(bullet);
 				prizesPos.erase(prize);
 				return;
