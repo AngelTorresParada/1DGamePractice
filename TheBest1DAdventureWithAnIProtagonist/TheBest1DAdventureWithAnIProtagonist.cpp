@@ -5,6 +5,7 @@
 #include "stdio.h"
 #include "conio.h"
 #include "windows.h"
+#include <vector>
 
 #define ESC_KEY 27
 #define A_KEY 97
@@ -14,101 +15,65 @@
 
 #define ENEMY_MAX_CYCLE 30
 #define EXTRA_MAX_CYCLE 150
+#define MAX_LIVES 5
+
+#define RIGHT 0
+#define LEFT 1
+
+struct Enemy {
+	int pos = -1;
+	int appearance = -1;
+};
+
+const int width = 80;
+
+std::vector<Enemy> enemiesPos;
+std::vector<int> bulletsPos;
+std::vector<int> prizesPos;
+
+int x = width / 2;
+int pressedKey = 0;
+int enemyCicles = ENEMY_MAX_CYCLE;
+int prizeCicles = EXTRA_MAX_CYCLE;
+int score = 0;
+int lives = MAX_LIVES;
+
+char map[width + 2];
+char rain0[width + 1];
+char rain1[width + 1];
+char rain2[width + 1];
+char rain3[width + 1];
+
+bool killGame = false;
+
+void updateCycles();
+void buildMap();
+void drawMap();
+void updateBullet();
+void updateEnemy();
+void updatePrize();
+void checkCollisions();
+
+void buildRain();
 
 
 void main() {	
 
-	const int width = 100;
-
-	int x = 0;
-	int bulletPos = x;
-	int enemyPos = -1;
-	int extraPos = -1;
-	int pressedKey = 0;
-	int enemyCicles = ENEMY_MAX_CYCLE;
-	int enemyAppearance = rand() % 2;
-	int extraAppearance = rand() % width;
-	int score = 0;
-
-	bool killGame = false;
-
-	printf("\n\n\n\n\n\n\n\n\n");
-
 	while (!killGame) {
+
+		updateCycles();
 		
-		//CICLO DEL ENEMIGO
-		if (enemyPos == -1) {
-			enemyCicles--;
-		}
+		buildMap();
 
-		//PINTADO
-		for (int i = 0; i < width; i++) {
-			if (i == x) {
-				printf("i");
-			}
-			else {
-				if (i == bulletPos) {
-					if (x > bulletPos) printf("<");
-					else {
-						if (x < bulletPos) printf(">");
-					}
-				}
-				else {
-					if (i == enemyPos) {
-						printf("@");
-					}
-					else if (i == extraPos) {
-						printf("&");
-					}
-					else printf("_");
-				}
-			}
-		}
+		drawMap();
 
-		printf("   SCORE: %3d", score);
-		printf("\r");
+		updateBullet();
 
+		updateEnemy();
 
-		//LOGICA DEL ENEMIGO
-		if (enemyCicles == 0) {
-			if (enemyPos == -1) {
-				enemyAppearance = rand() % 2;
-				if (enemyAppearance) enemyPos = width - 1;
-				else enemyPos = 0;
-			}
-			if (enemyPos < 0 || enemyPos > width - 1) {
-				enemyPos = -1;
-				enemyCicles = ENEMY_MAX_CYCLE;
-			}
-			else {
-				if (enemyAppearance) enemyPos--;
-				else enemyPos++;
+		updatePrize();
 
-				if (enemyPos == x) killGame = true;
-			}
-		}
-
-
-		//LOGICA DEL PREMIO
-
-
-		//LOGICA DE LA BALA
-		if (x > bulletPos) bulletPos--;
-		else {
-			if (x < bulletPos) bulletPos++;
-		}
-
-		if (bulletPos < 0 || bulletPos >= width - 1) bulletPos = x;
-
-
-		//INTERACCION BALA-ENEMIGO
-		if (bulletPos == enemyPos || (bulletPos < x && bulletPos + 1 == enemyPos) || (bulletPos > x && bulletPos - 1 == enemyPos)) {
-			enemyPos = -1;
-			enemyCicles = ENEMY_MAX_CYCLE;
-			bulletPos = x;
-			score += 5;
-		}
-
+		checkCollisions();
 
 		//LECTURA DE TECLA
 		if (_kbhit()) {
@@ -117,26 +82,19 @@ void main() {
 			switch (pressedKey) {
 
 				case A_KEY:
-					if (x != 0) {
-						x--;
-						bulletPos--;
-					}
+					if (x != 0) x--;
 					break;
 
 				case D_KEY:
-					if (x != width - 1)
-					{
-						x++;
-						bulletPos++;
-					}
+					if (x != width - 1) x++;
 					break;
 
 				case K_KEY:
-					if (x != 0 && bulletPos == x) bulletPos--;
+					bulletsPos.push_back(x - 1);
 					break;
 
 				case L_KEY:
-					if (x != width - 1 && bulletPos == x) bulletPos++;
+					bulletsPos.push_back(x + 1);
 					break;
 
 				case ESC_KEY:
@@ -145,7 +103,191 @@ void main() {
 			}
 
 		}
-		Sleep(30);
+		Sleep(15);
 	}
+}
+
+
+void buildMap() {
+
+	for (int i = 0; i < width; i++) {
+		map[i] = '0';
+	}
+
+	map[x] = 'i';
+
+	for (auto bullet = bulletsPos.begin(); bullet != bulletsPos.end(); ++bullet) {
+		if (x > *bullet) map[*bullet] = '<';
+		if (x < *bullet) map[*bullet] = '>';
+	}
+
+	for (auto enemy = enemiesPos.begin(); enemy != enemiesPos.end(); enemy++) {
+		map[enemy->pos] = '@';
+	}
+
+	for (auto prize = prizesPos.begin(); prize != prizesPos.end(); prize++) {
+		map[*prize] = '&';
+	}
+
+	for (int i = 0; i < width; i++) {
+		if (map[i] == '0') map[i] = '_';
+	}
+
+	map[width + 1] = '\0';
+}
+
+
+void drawMap() {
+
+	buildRain();
+
+	system("cls");
+	printf("\n\n\n\n\n\n\n\n\n\n\n\n\n");
+	printf("          %s\n", rain0);
+	printf("          %s\n", rain1);
+	printf("          %s\n", rain2);
+	printf("          %s\n", rain3);
+	printf("          %s", map);
+	printf("   SCORE: %3d\n", score);
+	printf("Lives: %d", lives);
+	printf("\r");
+}
+
+
+void updateCycles() {
+
+	//CICLOS DE ELEMENTOS SPAWNEABLES
+
+	enemyCicles--;
+
+	prizeCicles--;
+}
+
+
+void updateBullet() {
+
+	//LOGICA DE LA BALA
+	for (auto bullet = bulletsPos.begin(); bullet != bulletsPos.end(); bullet++) {
+		if (*bullet < x) *bullet -= 1;
+		else {
+			if (*bullet > x) *bullet += 1;
+		}
+
+		if (*bullet < 0 || *bullet >= (width - 1)) {
+			bulletsPos.erase(bullet);
+			return;
+		}
+	}
+
+}
+
+
+void updateEnemy() {
+
+	//LOGICA DEL ENEMIGO
+
+	for (auto enemy = enemiesPos.begin(); enemy != enemiesPos.end(); ++enemy) {
+		if (enemy->appearance == LEFT) enemy->pos--;
+		if (enemy->appearance == RIGHT) enemy->pos++;
+
+		if (enemy->pos == x) {
+			lives--;
+			enemiesPos.erase(enemy);
+			if (lives <= 0) {
+				killGame = true;
+				return;
+			}
+			break;
+		}
+	}
+
+
+	if (enemyCicles == 0) {
+		int a = rand() % 2;
+		Enemy enemy;
+		enemy.pos = (a == LEFT) ? width - 1 : 0;
+		enemy.appearance = a;
+		enemiesPos.push_back(enemy);
+		enemyCicles = ENEMY_MAX_CYCLE;
+	}
+
+}
+
+
+void checkCollisions() {
+
+	//INTERACCION BALA-ENEMIGO
+	for (auto enemy = enemiesPos.begin(); enemy != enemiesPos.end(); enemy++) {
+		for (auto bullet = bulletsPos.begin(); bullet != bulletsPos.end(); bullet++) {
+			if (*bullet == enemy->pos || (*bullet < x && *bullet + 1 == enemy->pos) || (*bullet > x && *bullet - 1 == enemy->pos)) {
+				enemiesPos.erase(enemy);
+				bulletsPos.erase(bullet);
+				score += 5;
+				return;
+			}
+		}
+	}
+
+
+}
+
+
+void updatePrize() {
+
+	//LOGICA DEL PREMIO
+	if (prizeCicles == 0) {
+		prizesPos.push_back(rand() % width);
+		prizeCicles = EXTRA_MAX_CYCLE;
+	}
+
+	for (auto prize = prizesPos.begin(); prize != prizesPos.end(); prize++) {
+		if (*prize == x) {
+			score += 100;
+			prizesPos.erase(prize);
+			break;
+		}
+	}
+
+	for (auto prize = prizesPos.begin(); prize != prizesPos.end(); prize++) {
+		for (auto bullet = bulletsPos.begin(); bullet != bulletsPos.end(); ) {
+			if (*prize == *bullet) {
+				bulletsPos.erase(bullet);
+				prizesPos.erase(prize);
+				return;
+			}
+			else {
+				bullet++;
+			}
+		}
+	}
+
+}
+
+
+void buildRain() {
+
+	int chance;
+	if (rain0 != nullptr) {
+		if (rain1 != nullptr) {
+			if (rain2 != nullptr) {
+				for (int i = 0; i <= width; i++) {
+					rain3[i] = rain2[i];
+				}
+			}
+			for (int i = 0; i <= width; i++) {
+				rain2[i] = rain1[i];
+			}
+		}
+		for (int i = 0; i <= width; i++) {
+			rain1[i] = rain0[i];
+		}
+	}
+
+	for (int i = 0; i < width; i++) {
+		chance = rand();
+		if (chance % 10 == 0) rain0[i] = '|';
+		else rain0[i] = ' ';
+	}
+	rain0[width] = '\0';
 }
 
